@@ -12,10 +12,10 @@ setup(
     author_email="cory@lukasa.co.uk",
 
     setup_requires=[
-        "cffi>=1.0.0",
+        "cffi>=1.4",
     ],
     install_requires=[
-        "cffi>=1.0.0",
+        "cffi>=1.4",
     ],
 
     cffi_modules=["src/securetransport/build.py:ffibuilder"],
