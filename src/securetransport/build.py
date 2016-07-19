@@ -20,7 +20,7 @@ ffibuilder.cdef(
     typedef signed long OSStatus;
     typedef ... *CFAllocatorRef;
     typedef ... *SSLContextRef;
-    typedef ... *SSLConnectionRef;
+    typedef const void *SSLConnectionRef;
 
     typedef enum {
         kSSLServerSide,
@@ -48,6 +48,8 @@ ffibuilder.cdef(
     OSStatus SSLSetConnection (SSLContextRef, SSLConnectionRef);
 
     OSStatus SSLSetPeerDomainName (SSLContextRef, const char *, size_t);
+
+    OSStatus SSLHandshake (SSLContextRef);
 
     extern "Python" OSStatus python_read_func(SSLConnectionRef,
                                               void *,
