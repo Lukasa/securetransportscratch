@@ -45,6 +45,10 @@ ffibuilder.cdef(
                            SSLReadFunc,
                            SSLWriteFunc);
 
+    OSStatus SSLSetConnection (SSLContextRef, SSLConnectionRef);
+
+    OSStatus SSLSetPeerDomainName (SSLContextRef, const char *, size_t);
+
     extern "Python" OSStatus python_read_func(SSLConnectionRef,
                                               void *,
                                               size_t*);
