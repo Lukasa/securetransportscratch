@@ -350,6 +350,11 @@ ffibuilder.cdef(
                                       const void *,
                                       size_t *);
 
+    typedef void (*SSLALPNFunc) (SSLContextRef,
+                                 void *,
+                                 const void *,
+                                 size_t);
+
     void CFRelease (CFTypeRef);
 
     SSLContextRef SSLCreateContext(CFAllocatorRef,
@@ -398,6 +403,9 @@ ffibuilder.cdef(
     OSStatus SSLGetPeerDomainNameLength(SSLContextRef, size_t *);
     OSStatus SSLGetPeerDomainName(SSLContextRef, char *, size_t *);
 
+    OSStatus SSLSetALPNData(SSLContextRef, const void *, size_t);
+    void SSLSetALPNFunc(SSLContextRef, SSLALPNFunc, void *);
+
     extern "Python" OSStatus python_read_func(SSLConnectionRef,
                                               void *,
                                               size_t*);
@@ -405,6 +413,11 @@ ffibuilder.cdef(
     extern "Python" OSStatus python_write_func(SSLConnectionRef,
                                                void *,
                                                size_t*);
+
+    extern "Python" void python_alpn_func(SSLContextRef,
+                                          void *,
+                                          const void *,
+                                          size_t);
 """)
 
 if __name__ == "__main__":

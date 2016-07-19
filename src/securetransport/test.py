@@ -77,6 +77,19 @@ status = lib.SSLSetPeerDomainName(context, server_name, server_name_len)
 assert not status, "status %s" % status
 print "Peer domain name set to %s" % server_name
 
+# TEST
+@ffi.def_extern()
+def python_alpn_func(context, info, alpn_data, size):
+    real_data = ffi.buffer(alpn_data, size)[:]
+    print "Got ALPN data %s" % real_data
+
+
+alpn_data = b"\x08http/1.1"
+status = lib.SSLSetALPNData(context, alpn_data, len(alpn_data))
+assert not status, "status %s" % status
+status = lib.SSLSetALPNFunc(context, lib.python_alpn_func, ffi.NULL)
+print "Set ALPN"
+
 
 # Part 1.5: Call SSLSetCertificate to specify the certificate to be used in
 # authentication (required for server side, optional for client).
