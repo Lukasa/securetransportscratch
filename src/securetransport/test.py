@@ -32,9 +32,9 @@ def python_read_func(connection, data, data_length):
 
     while data_to_go > 0:
         data_chunk = socket.recv(data_to_go)
-        data_buffer[data_read:data_read + len(data_chunk)] = data_chunk
-        data_to_go -= len(data_chunk)
+        data_buffer[:len(data_chunk)] = data_chunk
         data_read += len(data_chunk)
+        data_to_go -= len(data_chunk)
 
     return 0
 
@@ -54,7 +54,7 @@ def python_write_func(connection, data, data_length):
 status = lib.SSLSetIOFuncs(
     context, lib.python_read_func, lib.python_write_func
 )
-assert not status
+assert not status, "status %s" % status
 print "IO funcs set!"
 
 
@@ -64,7 +64,7 @@ print "IO funcs set!"
 s = socket.socket()
 socket_handle = ffi.new_handle(s)
 status = lib.SSLSetConnection(context, socket_handle)
-assert not status
+assert not status, "status %s" % status
 print "Connection set to %s" % socket_handle
 
 
@@ -74,7 +74,7 @@ print "Connection set to %s" % socket_handle
 server_name = b"http2bin.org"
 server_name_len = len(server_name)
 status = lib.SSLSetPeerDomainName(context, server_name, server_name_len)
-assert not status
+assert not status, "status %s" % status
 print "Peer domain name set to %s" % server_name
 
 
@@ -88,5 +88,55 @@ print "Peer domain name set to %s" % server_name
 # secure session.
 s.connect((server_name, 443))
 status = lib.SSLHandshake(context)
-assert not status
+assert not status, "status %s" % status
 print "Handshake complete!"
+
+# Part 3: Maintaining the Session
+# In this case, let's attempt to make a basic HTTP request!
+request = (
+    b'GET /get HTTP/1.1\r\n'
+    b'Host: http2bin.org\r\n'
+    b'Accept: */*\r\n'
+    b'Accept-Encoding: identity\r\n'
+    b'\r\n'
+)
+processed = ffi.new("size_t *")
+status = lib.SSLWrite(context, request, len(request), processed)
+assert not status, "status %s" % status
+assert processed[0] == len(request)
+
+response = b''
+while True:
+    buffer = bytearray(65535)
+    actual_read = ffi.new("size_t *")
+    status = lib.SSLRead(context, ffi.from_buffer(buffer), 65535, actual_read)
+    assert not status, "status %s" % status
+    print "Actually read %d plaintext bytes" % actual_read[0]
+    response += buffer[0:actual_read[0]]
+
+    if response.endswith(b'"url": "https://http2bin.org/get"\n}\n'):
+        break
+
+print response
+
+
+# Part 4: Ending a session
+# Part 4.1: Call SSLClose to close the secure session.
+status = lib.SSLClose(context)
+assert not status, "status %s" % status
+
+# Part 4.2: Close the connection and dispose of the connection reference
+# (SSLConnectionRef).
+s.shutdown(socket.SHUT_RDWR)  # This is normally unnecessary, but let's block.
+s.close()
+del socket_handle  # We can lose the reference to this now.
+
+# Part 4.3: If you created the context by calling SSLCreateContext, release the
+# SSL session context by calling CFRelease.
+lib.CFRelease(context)
+del context
+
+# Part 4.4: If you have called SSLGetPeerCertificates to obtain any
+# certificates, call CFRelease to release the certificate reference objects.
+# Not relevant to us.
+print "Disposed successfully!"

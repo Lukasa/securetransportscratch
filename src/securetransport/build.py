@@ -12,7 +12,7 @@ ffibuilder.set_source(
     #include <stdlib.h>
     #include <Security/SecureTransport.h>
     """,
-    extra_link_args=['-framework', 'Security'],
+    extra_link_args=['-framework', 'Security', '-framework', 'CoreFoundation'],
 )
 
 ffibuilder.cdef(
@@ -21,6 +21,7 @@ ffibuilder.cdef(
     typedef ... *CFAllocatorRef;
     typedef ... *SSLContextRef;
     typedef const void *SSLConnectionRef;
+    typedef const void *CFTypeRef;
 
     typedef enum {
         kSSLServerSide,
@@ -37,6 +38,8 @@ ffibuilder.cdef(
                                       const void *,
                                       size_t *);
 
+    void CFRelease (CFTypeRef);
+
     SSLContextRef SSLCreateContext(CFAllocatorRef,
                                    SSLProtocolSide,
                                    SSLConnectionType);
@@ -50,6 +53,12 @@ ffibuilder.cdef(
     OSStatus SSLSetPeerDomainName (SSLContextRef, const char *, size_t);
 
     OSStatus SSLHandshake (SSLContextRef);
+
+    OSStatus SSLRead (SSLContextRef, void *, size_t, size_t *);
+
+    OSStatus SSLWrite (SSLContextRef, const void *, size_t, size_t *);
+
+    OSStatus SSLClose (SSLContextRef);
 
     extern "Python" OSStatus python_read_func(SSLConnectionRef,
                                               void *,
