@@ -376,6 +376,7 @@ ffibuilder.cdef(
     OSStatus SSLClose(SSLContextRef);
 
     OSStatus SSLGetNumberSupportedCiphers(SSLContextRef, size_t *);
+    OSStatus SSLGetSupportedCiphers(SSLContextRef, SSLCipherSuite *, size_t *);
     OSStatus SSLSetEnabledCiphers(SSLContextRef,
                                   const SSLCipherSuite *,
                                   size_t);
