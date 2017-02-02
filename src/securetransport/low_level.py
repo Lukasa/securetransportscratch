@@ -440,7 +440,7 @@ class SSLSessionContext(object):
         state = ffi.new("SSLSessionState *")
         status = lib.SSLGetSessionState(self._ctx, state)
         _raise_on_error(status)
-        return state[0]
+        return SSLSessionState(state[0])
 
     def get_negotiated_protocol_version(self):
         """
