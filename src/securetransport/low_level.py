@@ -549,6 +549,9 @@ class SSLSessionContext(object):
         :returns: The number of bytes written.
         :rtype: ``int``
         """
+        if isinstance(data, memoryview):
+            data = data.tobytes()
+
         write_count = ffi.new("size_t *")
         status = lib.SSLWrite(self._ctx, data, len(data), write_count)
         _raise_on_error(status)
