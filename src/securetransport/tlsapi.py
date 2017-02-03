@@ -14,7 +14,7 @@ import socket
 from .tls import (
     ClientContext, TLSWrappedSocket, TLSWrappedBuffer, Backend, TrustStore,
     TLSConfiguration, CipherSuite, NextProtocol, TLSVersion, WantWriteError,
-    WantReadError
+    WantReadError, TLSError
 )
 from .low_level import (
     SSLSessionContext, SSLProtocolSide, SSLConnectionType, SSLSessionState,
@@ -60,6 +60,8 @@ class WrappedSocket(TLSWrappedSocket):
         # This method needs to work with sockets in three modes: non-blocking,
         # blocking, and timeout. For non-blocking and timeout sockets the rule
         # is: read only once. If those attempts to read raise, they raise.
+
+        # TODO: refactor all of this nonsense to use selectors.
         blocking = self._socket.gettimeout() is None
         done_io = False
 
@@ -73,17 +75,16 @@ class WrappedSocket(TLSWrappedSocket):
                     raise
 
                 data = self._socket.recv(8192)
-                # TODO: EOF
+                if not data:
+                    raise TLSError("Unexpected EOF during handshake")
                 self._buffer.receive_bytes_from_network(data)
                 done_io = True
-                # TODO: what do we do with this?
             except WantWriteError:
                 # If we're in non-blocking mode, we want to raise an error
                 # here.
                 if not blocking and done_io:
                     raise
 
-                # TODO: where do we get our data?
                 some_data = self._buffer.peek_bytes(8192)
                 sent = self._socket.send(some_data)
                 self._buffer.consume_bytes(sent)
@@ -108,7 +109,8 @@ class WrappedSocket(TLSWrappedSocket):
     def unwrap(self) -> socket.socket:
         self._buffer.shutdown()
 
-        # TODO: Gotta resolve this ambiguity
+        # TODO: So, does unwrap make any sense here? How do we make sure we
+        # read up to close_notify, but no further?
         while True:
             some_data = self._buffer.peek_bytes(8192)
             if not some_data:
@@ -128,6 +130,9 @@ class WrappedSocket(TLSWrappedSocket):
     def recv(self, bufsize, flags=0):
         # Do we need to loop here to prevent WantReadError being raised for
         # blocking sockets?
+        # TODO: This needs to change. In particular, errSSLWouldBlock can be
+        # returned *along with data* for partial reads. That means we need to
+        # shove that data into the WantReadError if it gets raised.
         try:
             return self._buffer.read(bufsize)
         except WantReadError:
@@ -151,7 +156,8 @@ class WrappedSocket(TLSWrappedSocket):
             # TODO: Ok, so this is a fun problem. Let's talk about it.
             #
             # If we make the rule that the socket will always drain the send
-            # buffer when sending data (a good plan), then the only way
+            # buffer when sending data (a good plan, and one that matches the
+            # behaviour of the legacy ``ssl`` module), then the only way
             # WantWriteError can occur is if the amount of data to be written
             # is larger than the write buffer in the buffer object.
             # Now OpenSSL tolerates this by basically saying that if this
@@ -285,7 +291,6 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
         try:
             self._st_context.close()
         except WouldBlockError:
-            # TODO: Are the writes called on close?
             if self._send_buffer:
                 raise WantWriteError("Write needed") from None
             else:
