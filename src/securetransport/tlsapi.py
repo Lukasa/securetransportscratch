@@ -133,6 +133,7 @@ class WrappedSocket(TLSWrappedSocket):
         # TODO: This needs to change. In particular, errSSLWouldBlock can be
         # returned *along with data* for partial reads. That means we need to
         # shove that data into the WantReadError if it gets raised.
+        # TODO: Handle EOF better.
         try:
             return self._buffer.read(bufsize)
         except WantReadError:
