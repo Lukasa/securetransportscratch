@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 """
 Example implementation of the TLS abstract API using SecureTransport.
+
+As with so much of this, implementing the side functionality is best done by
+following the old networking adage: "when in doubt, do what curl does".
+For future reference then:
+https://github.com/curl/curl/blob/master/lib/vtls/darwinssl.c
 """
 from typing import Optional, Any, Union
 
@@ -164,6 +169,9 @@ class WrappedSocket(TLSWrappedSocket):
             # All of this is wholly gross, and I haven't really decided how I
             # want to proceed with it, but we do need to decide how we want to
             # handle it before we can move forward.
+
+            # TODO: Another relevant reference for us is this comment from the
+            # curl codebase: https://github.com/curl/curl/blob/807698db025f489dd7894f1195e4983be632bee2/lib/vtls/darwinssl.c#L2477-L2489
             pass
 
         sent = 0
@@ -270,6 +278,10 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
         pass
 
     def shutdown(self) -> None:
+        # A note: SSLClose will write the close_notify, but won't wait to read
+        # it. That means we can't really look for a close_notify. Awkward.
+        #
+        # I'm not sure how best to handle this. Do we just read to EOF? How?
         try:
             self._st_context.close()
         except WouldBlockError:
