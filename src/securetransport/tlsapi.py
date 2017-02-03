@@ -139,17 +139,41 @@ class WrappedSocket(TLSWrappedSocket):
         return len(data)
 
     def send(self, data, flags=0):
+        # TODO: Timeouts here need to be turned into deadlines.
         try:
-            written = self._buffer.write(data)
+            self._buffer.write(data)
         except WantWriteError:
-            # TODO: THIS IS ALMOST CERTAINLY NOT RIGHT, SIGNALING MUST BE DONE
-            # HERE.
-            written = 0
+            # TODO: Ok, so this is a fun problem. Let's talk about it.
+            #
+            # If we make the rule that the socket will always drain the send
+            # buffer when sending data (a good plan), then the only way
+            # WantWriteError can occur is if the amount of data to be written
+            # is larger than the write buffer in the buffer object.
+            # Now OpenSSL tolerates this by basically saying that if this
+            # happens, you need to drain the write buffer, and then to call
+            # "SSL_write" again with the exact same buffer, and it'll just
+            # continue from where it was.
+            #
+            # This is a pretty stupid behaviour, but it's do-able. The bigger
+            # problem is that, while we could in principle change it (e.g. by
+            # having WantWriteError indicate how many bytes were consumed),
+            # making that change will require that OpenSSL implementations
+            # bend over backwards to work around their requirement to reuse the
+            # same buffer.
+            #
+            # All of this is wholly gross, and I haven't really decided how I
+            # want to proceed with it, but we do need to decide how we want to
+            # handle it before we can move forward.
+            pass
 
-        some_data = self._buffer.peek_bytes(8192)
-        sent = self._socket.send(some_data, flags)
-        self._buffer.consume_bytes(sent)
-        return written
+        sent = 0
+        while True:
+            some_data = self._buffer.peek_bytes(8192)
+            if not some_data:
+                break
+            sent += self._socket.send(some_data, flags)
+            self._buffer.consume_bytes(sent)
+        return sent
 
     def sendall(self, bytes, flags=0):
         send_buffer = memoryview(bytes)
