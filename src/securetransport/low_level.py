@@ -538,9 +538,17 @@ class SSLSessionContext(object):
         read_count = ffi.new("size_t *")
 
         status = lib.SSLRead(self._ctx, buffer, size, read_count)
-        _raise_on_error(status)
 
-        return ffi.buffer(buffer, read_count[0])[:]
+        # We need to catch a weird behaviour here: Apple allows a call to
+        # SSLRead to return errSSLWouldBlock but also to have read some data.
+        # For our case, we want to consider that as a non-error condition.
+        # Short writes are just fine by us.
+        read_bytes = read_count[0]
+        short_read = (status == lib.errSSLWouldBlock and read_bytes)
+        if not short_read:
+            _raise_on_error(status)
+
+        return ffi.buffer(buffer, read_bytes)[:]
 
     def write(self, data):
         """
@@ -554,9 +562,18 @@ class SSLSessionContext(object):
 
         write_count = ffi.new("size_t *")
         status = lib.SSLWrite(self._ctx, data, len(data), write_count)
-        _raise_on_error(status)
 
-        return write_count[0]
+        # We need to catch a weird behaviour here: Apple allows a call to
+        # SSLWrite to return errSSLWouldBlock but also to have written some
+        # data. For our case, we want to consider that as a non-error
+        # condition. Short writes are just fine by us.
+        written_bytes = write_count[0]
+        short_write = (status == lib.errSSLWouldBlock and written_bytes)
+
+        if not short_write:
+            _raise_on_error(status)
+
+        return written_bytes
 
     def close(self):
         """
