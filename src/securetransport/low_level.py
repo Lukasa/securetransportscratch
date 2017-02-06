@@ -8,6 +8,7 @@ import re
 import enum
 
 from _securetransport import ffi, lib
+from tls import TLSError
 
 
 class CastableEnum(enum.Enum):
@@ -253,7 +254,7 @@ SSLErrors = CastableEnum(
 )
 
 
-class SecureTransportError(Exception):
+class SecureTransportError(TLSError):
     """
     An error occurred in SecureTransport.
     """

@@ -286,7 +286,6 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
             self._st_context.handshake()
         except WouldBlockError:
             raise self._io_error() from None
-        # TODO: Make SecureTransportError a subclass of TLSError
 
     def cipher(self) -> Optional[CipherSuite]:
         pass
