@@ -291,7 +291,7 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
         pass
 
     def negotiated_protocol(self) -> Optional[Union[NextProtocol, bytes]]:
-        pass
+        return None
 
     @property
     def context(self) -> SecureTransportClientContext:
