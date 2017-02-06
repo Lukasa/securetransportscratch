@@ -9,7 +9,7 @@ import socket
 
 from abc import ABCMeta, abstractmethod, abstractproperty, abstractclassmethod
 from collections import namedtuple
-from enum import Enum, auto
+from enum import IntEnum, Enum, auto
 
 
 _configuration_fields = [

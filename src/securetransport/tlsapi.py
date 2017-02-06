@@ -288,7 +288,15 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
             raise self._io_error() from None
 
     def cipher(self) -> Optional[CipherSuite]:
-        pass
+        try:
+            cipher = self._st_context.get_negotiated_cipher()
+        except SecureTransportError:
+            return None
+
+        try:
+            return CipherSuite(cipher)
+        except ValueError:
+            return cipher
 
     def negotiated_protocol(self) -> Optional[Union[NextProtocol, bytes]]:
         """
@@ -311,7 +319,11 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
             SSLProtocol.TLSProtocol11: TLSVersion.TLSv1_1,
             SSLProtocol.TLSProtocol12: TLSVersion.TLSv1_2,
         }
-        version = self._st_context.get_negotiated_protocol_version()
+        try:
+            version = self._st_context.get_negotiated_protocol_version()
+        except SecureTransportError:
+            return None
+
         return mapping[version]
 
     def shutdown(self) -> None:

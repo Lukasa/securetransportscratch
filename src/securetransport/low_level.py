@@ -286,7 +286,11 @@ def _raise_on_error(code):
     else:
         exc = SecureTransportError
 
-    code = SSLErrors(code)
+    try:
+        code = SSLErrors(code)
+    except ValueError:
+        pass
+
     raise exc(code)
 
 
