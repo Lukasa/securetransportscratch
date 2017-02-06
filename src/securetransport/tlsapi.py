@@ -222,6 +222,32 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
         self._receive_buffer = bytearray()
         self._send_buffer = bytearray()
 
+    def _io_error(self):
+        """
+        Raises the appropriate I/O error if we got a WouldBlockError.
+        """
+        # The way SecureTransport works here is a bit tricky. Ideally we'd
+        # track which was the last I/O operation that returned "short", but
+        # that doesn't actually work: SecureTransport will issue a bunch of
+        # somewhat unexpected reads after it has issued a write. In practice,
+        # almost all errSSLWouldBlock errors come from the read callback, not
+        # the write callback, even though what ST actually wants is for the
+        # user to WRITE THAT DAMN DATA so that the server will respond. That
+        # means that if we just cared what the last "short" operation was we'd
+        # get a bunch of WantReadErrors that are more philosophical than
+        # helpful: yes, we do want to read, but we want to read something that
+        # won't arrive until we write. That would make us *technically* correct
+        # (the best kind of correct), but not very helpful.
+        #
+        # So instead what we do is check the state of the buffers. If there is
+        # data in the send buffer, we assume that we need to drain that buffer
+        # first before any further operations will work, either for reads or
+        # for writes.
+        if self._send_buffer:
+            return WantWriteError("Must write data")
+
+        return WantReadError("Must read data")
+
     def _read_func(self, _, to_read):
         # We're doing some unnecessary copying here, but that's ok for
         # demo purposes.
@@ -243,7 +269,7 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
         try:
            return self._st_context.read(amt)
         except WouldBlockError:
-            raise WantReadError("Read needed") from None
+            raise self._io_error() from None
 
     def readinto(self, buffer: Any, amt: Optional[int] = None) -> int:
         if amt is None or amt > len(buffer):
@@ -257,18 +283,13 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
         try:
             return self._st_context.write(buf)
         except WouldBlockError:
-            # Because we are using unbounded buffers this isn't currently
-            # possible. We should consider bounding our buffers in future.
-            raise WantWriteError("Write needed") from None
+            raise self._io_error() from None
 
     def do_handshake(self) -> None:
         try:
             self._st_context.handshake()
         except WouldBlockError:
-            if self._send_buffer:
-                raise WantWriteError("Write needed") from None
-            else:
-                raise WantReadError("Read needed") from None
+            raise self._io_error() from None
         # TODO: Make SecureTransportError a subclass of TLSError
 
     def cipher(self) -> Optional[CipherSuite]:
@@ -292,10 +313,8 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
         try:
             self._st_context.close()
         except WouldBlockError:
-            if self._send_buffer:
-                raise WantWriteError("Write needed") from None
-            else:
-                raise WantReadError("Read needed") from None
+            # TODO: do we just swallow this instead?
+            raise self._io_error() from None
 
     def receive_bytes_from_network(self, bytes):
         self._receive_buffer += bytes
