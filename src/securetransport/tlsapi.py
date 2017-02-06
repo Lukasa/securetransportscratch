@@ -333,6 +333,15 @@ class SecureTransportTrustStore(TrustStore):
 
     @classmethod
     def from_pem_file(cls, path):
+        # TODO: Ok, so the comment below is not quite right.
+        #
+        # curl has solved this problem by using
+        # kSSLSessionOptionBreakOnServerAuth and then running a custom
+        # validator. This will work well. Note that the documentation states
+        # that for macOS 10.7 and earlier SecureTransport will not disable its
+        # own validation (weirdly). We need to be cautious about older macOS
+        # versions here to avoid unexpectedly allowing connections that should
+        # be forbidden.
         raise NotImplementedError(
             "SecureTransport does not support PEM bundles as trust stores"
         )
