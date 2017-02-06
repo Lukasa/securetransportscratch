@@ -461,7 +461,7 @@ class SSLSessionContext(object):
         version = ffi.new("SSLProtocol *")
         status = lib.SSLGetNegotiatedProtocolVersion(self._ctx, version)
         _raise_on_error(status)
-        return version[0]
+        return SSLProtocol(version[0])
 
     def set_peer_id(self, peer_id_data):
         """

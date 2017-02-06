@@ -9,6 +9,7 @@ ctx = SecureTransportClientContext(TLSConfiguration(ciphers=[]))
 mysock = socket.create_connection(('httpbin.org', 443))
 tls_sock = ctx.wrap_socket(mysock, server_hostname=b"httpbin.org")
 tls_sock.do_handshake()
+print(tls_sock.negotiated_tls_version())
 
 data = conn.send(h11.Request(method=b'GET', target=b'/get', headers=[(b'host', b'httpbin.org')]))
 data += conn.send(h11.EndOfMessage())

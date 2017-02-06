@@ -45,14 +45,14 @@ class NextProtocol(Enum):
 
 
 class TLSVersion(Enum):
-    MINIMUM_SUPPORTED = auto
-    SSLv2 = auto
-    SSLv3 = auto
-    TLSv1 = auto
-    TLSv1_1 = auto
-    TLSv1_2 = auto
-    TLSv1_3 = auto
-    MAXIMUM_SUPPORTED = auto
+    MINIMUM_SUPPORTED = auto()
+    SSLv2 = auto()
+    SSLv3 = auto()
+    TLSv1 = auto()
+    TLSv1_1 = auto()
+    TLSv1_2 = auto()
+    TLSv1_3 = auto()
+    MAXIMUM_SUPPORTED = auto()
 
 
 class Certificate(metaclass=ABCMeta):

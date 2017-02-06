@@ -18,7 +18,7 @@ from .tls import (
 )
 from .low_level import (
     SSLSessionContext, SSLProtocolSide, SSLConnectionType, SSLSessionState,
-    SecureTransportError, WouldBlockError, SSLErrors
+    SecureTransportError, WouldBlockError, SSLErrors, SSLProtocol
 )
 
 
@@ -291,6 +291,10 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
         pass
 
     def negotiated_protocol(self) -> Optional[Union[NextProtocol, bytes]]:
+        """
+        SecureTransport does not support ALPN or NPN using any public APIs, so
+        this functionality is not supported here.
+        """
         return None
 
     @property
@@ -298,7 +302,17 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
         return self._original_context
 
     def negotiated_tls_version(self) -> Optional[TLSVersion]:
-        pass
+        # We'll need to generalise this stuff.
+        mapping = {
+            SSLProtocol.SSLProtocolUnknown: None,
+            SSLProtocol.SSLProtocol2: TLSVersion.SSLv2,
+            SSLProtocol.SSLProtocol3: TLSVersion.SSLv3,
+            SSLProtocol.TLSProtocol1: TLSVersion.TLSv1,
+            SSLProtocol.TLSProtocol11: TLSVersion.TLSv1_1,
+            SSLProtocol.TLSProtocol12: TLSVersion.TLSv1_2,
+        }
+        version = self._st_context.get_negotiated_protocol_version()
+        return mapping[version]
 
     def shutdown(self) -> None:
         # A note: SSLClose will write the close_notify, but won't wait to read
