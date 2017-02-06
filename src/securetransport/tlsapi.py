@@ -18,7 +18,8 @@ from .tls import (
 )
 from .low_level import (
     SSLSessionContext, SSLProtocolSide, SSLConnectionType, SSLSessionState,
-    SecureTransportError, WouldBlockError, SSLErrors, SSLProtocol
+    SecureTransportError, WouldBlockError, SSLErrors, SSLProtocol,
+    SSLSessionOption
 )
 
 
@@ -237,6 +238,47 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
         self._receive_buffer = bytearray()
         self._send_buffer = bytearray()
 
+        # Also apply any configuration we may have to apply.
+        self._process_configuration()
+
+    def _process_configuration(self):
+        """
+        Given the configuration we got at setup time, handle it.
+        """
+        # TODO: handle: 'validate_certificates', 'certificate_chain',
+        # 'ciphers', 'inner_protocols', 'lowest_supported_version',
+        # 'highest_supported_version', 'trust_store'
+        config = self._original_context.configuration
+
+        # In either of these cases, we need to break on server auth to take
+        # charge of validation. If validate_certificates is False, we will do
+        # nothing then: if it's True, then the user has set a custom trust
+        # store and we'll do some annoyingly complex work to validate the
+        # certs.
+        # TODO: What is the oldest supported macOS version? We may need to
+        # call the deprecated function SSLSetEnableCertVerify if we must
+        # support earlier than 10.8.
+        system_trust_stores = (None, _SystemTrustStore)
+        if (not config.validate_certificates or
+                config.trust_store not in system_trust_stores):
+            self._st_context.set_session_option(
+                SSLSessionOption.BreakOnServerAuth, True
+            )
+
+        if config.certificate_chain is not None:
+            # do this
+            pass
+
+        if config.ciphers is not None:
+            # do this
+            pass
+
+        # handle lowest supported versions
+
+        if config.trust_store is not None:
+            # do this
+            pass
+
     def _io_error(self):
         """
         Raises the appropriate I/O error if we got a WouldBlockError.
@@ -301,10 +343,26 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
             raise self._io_error() from None
 
     def do_handshake(self) -> None:
-        try:
-            self._st_context.handshake()
-        except WouldBlockError:
-            raise self._io_error() from None
+        # In some instances we need to loop on this handshake (e.g. if we break
+        # on server auth.)
+        while True:
+            try:
+                return self._st_context.handshake()
+            except WouldBlockError:
+                raise self._io_error() from None
+            except SecureTransportError as e:
+                # We have some error handling we have to do here. Specifically,
+                # we want to check whether we're breaking on the server auth
+                # here: if we are, we need to do our own handshake.
+                if e.error_code is SSLErrors.errSSLServerAuthCompleted:
+                    # Here we'd do the cert validation except...right now we
+                    # don't know how.
+                    # TODO: learn how.
+                    continue
+
+                # This isn't something we know how to treat specially. So
+                # don't.
+                raise
 
     def cipher(self) -> Optional[CipherSuite]:
         try:
@@ -374,7 +432,7 @@ class SecureTransportTrustStore(TrustStore):
         database.
         """
         # We just use a sentinel object here.
-        return __SystemTrustStore
+        return _SystemTrustStore
 
     @classmethod
     def from_pem_file(cls, path):
@@ -392,7 +450,7 @@ class SecureTransportTrustStore(TrustStore):
         )
 
 
-__SystemTrustStore = SecureTransportTrustStore()
+_SystemTrustStore = SecureTransportTrustStore()
 
 
 SecureTransportBackend = Backend(
