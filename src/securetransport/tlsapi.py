@@ -42,9 +42,8 @@ class SecureTransportClientContext(object):
         buffer = _SecureTransportBuffer(server_hostname, self)
         return WrappedSocket(socket, buffer)
 
-    def wrap_buffers(self, incoming: Any, outgoing: Any,
-                           server_hostname: Optional[str]) -> TLSWrappedBuffer:
-        pass
+    def wrap_buffers(self, server_hostname: Optional[str]) -> TLSWrappedBuffer:
+        return _SecureTransportBuffer(server_hostname, self)
 
 
 class WrappedSocket(TLSWrappedSocket):
@@ -107,6 +106,9 @@ class WrappedSocket(TLSWrappedSocket):
         return self._buffer.negotiated_tls_version
 
     def unwrap(self) -> socket.socket:
+        if self._socket is None:
+            return None
+
         self._buffer.shutdown()
 
         # TODO: So, does unwrap make any sense here? How do we make sure we
@@ -115,7 +117,14 @@ class WrappedSocket(TLSWrappedSocket):
             some_data = self._buffer.peek_bytes(8192)
             if not some_data:
                 break
-            sent = self._socket.send(some_data)
+
+            try:
+                sent = self._socket.send(some_data)
+            except ConnectionError:
+                # The socket is not able to tolerate sending, so we're done
+                # here.
+                break
+
             self._buffer.consume_bytes(sent)
 
         return self._socket
@@ -127,17 +136,27 @@ class WrappedSocket(TLSWrappedSocket):
         self.unwrap()
         self._socket.close()
 
+        # We lose our reference to our socket here so that we can do some
+        # short-circuit evaluation elsewhere.
+        self._socket = None
+
     def recv(self, bufsize, flags=0):
-        # Do we need to loop here to prevent WantReadError being raised for
-        # blocking sockets?
-        try:
-            return self._buffer.read(bufsize)
-        except WantReadError:
-            data = self._socket.recv(8192, flags)
-            if not data:
+        # This method loops in order for blocking sockets to behave correctly
+        # when drip-fed data.
+        while True:
+            # This check is inside the loop because of the possibility that
+            # side-effects triggered elsewhere in the loop body could cause a
+            # closure.
+            if self._socket is None:
                 return b''
-            self._buffer.receive_bytes_from_network(data)
-            return self._buffer.read(bufsize)
+
+            try:
+                return self._buffer.read(bufsize)
+            except WantReadError:
+                data = self._socket.recv(8192, flags)
+                if not data:
+                    return b''
+                self._buffer.receive_bytes_from_network(data)
 
     def recv_into(self, buffer, nbytes=None, flags=0):
         read_size = nbytes or len(buffer)
