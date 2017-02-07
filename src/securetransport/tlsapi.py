@@ -56,6 +56,34 @@ class WrappedSocket(TLSWrappedSocket):
         self.__dict__['_socket'] = socket
         self.__dict__['_buffer'] = buffer
 
+    def _do_read(self):
+        """
+        A helper method that performs a read from the network and passes the
+        data into the receive buffer.
+        """
+        data = self._socket.recv(8192)
+        if not data:
+            return 0
+        self._buffer.receive_bytes_from_network(data)
+        return len(data)
+
+    def _do_write(self):
+        """
+        A helper method that attempts to write all of the data from the send
+        buffer to the network.
+        """
+        total_sent = 0
+        while True:
+            data = self._buffer.peek_bytes(8192)
+            if not data:
+                break
+
+            sent = self._socket.send(data)
+            self._buffer.consume_bytes(sent)
+            total_sent += sent
+
+        return total_sent
+
     def do_handshake(self) -> None:
         # This method needs to work with sockets in three modes: non-blocking,
         # blocking, and timeout. For non-blocking and timeout sockets the rule
@@ -74,10 +102,9 @@ class WrappedSocket(TLSWrappedSocket):
                 if not blocking and done_io:
                     raise
 
-                data = self._socket.recv(8192)
-                if not data:
+                bytes_read = self._do_read()
+                if not bytes_read:
                     raise TLSError("Unexpected EOF during handshake")
-                self._buffer.receive_bytes_from_network(data)
                 done_io = True
             except WantWriteError:
                 # If we're in non-blocking mode, we want to raise an error
@@ -85,9 +112,8 @@ class WrappedSocket(TLSWrappedSocket):
                 if not blocking and done_io:
                     raise
 
-                some_data = self._buffer.peek_bytes(8192)
-                sent = self._socket.send(some_data)
-                self._buffer.consume_bytes(sent)
+                self._do_write()
+                done_io = True
             else:
                 # Handshake complete!
                break
@@ -115,18 +141,15 @@ class WrappedSocket(TLSWrappedSocket):
         # TODO: So, does unwrap make any sense here? How do we make sure we
         # read up to close_notify, but no further?
         while True:
-            some_data = self._buffer.peek_bytes(8192)
-            if not some_data:
-                break
-
             try:
-                sent = self._socket.send(some_data)
+                written = self._do_write()
             except ConnectionError:
                 # The socket is not able to tolerate sending, so we're done
                 # here.
                 break
-
-            self._buffer.consume_bytes(sent)
+            else:
+                if not written:
+                    break
 
         return self._socket
 
@@ -154,10 +177,7 @@ class WrappedSocket(TLSWrappedSocket):
             try:
                 return self._buffer.read(bufsize)
             except WantReadError:
-                data = self._socket.recv(8192, flags)
-                if not data:
-                    return b''
-                self._buffer.receive_bytes_from_network(data)
+                self._do_read()
 
     def recv_into(self, buffer, nbytes=None, flags=0):
         read_size = nbytes or len(buffer)
@@ -197,13 +217,7 @@ class WrappedSocket(TLSWrappedSocket):
             # curl codebase: https://github.com/curl/curl/blob/807698db025f489dd7894f1195e4983be632bee2/lib/vtls/darwinssl.c#L2477-L2489
             pass
 
-        sent = 0
-        while True:
-            some_data = self._buffer.peek_bytes(8192)
-            if not some_data:
-                break
-            sent += self._socket.send(some_data, flags)
-            self._buffer.consume_bytes(sent)
+        sent = self._do_write()
         return sent
 
     def sendall(self, bytes, flags=0):
