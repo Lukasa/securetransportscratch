@@ -265,6 +265,13 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
                 SSLSessionOption.BreakOnServerAuth, True
             )
 
+        # This should be do-able, but requires new bindings. Once again, curl
+        # can be our guide here: see CopyIdentityWithLabel and
+        # CopyIdentityFromPKSC12File for guidelines. Support for PEM doesn't
+        # seem to be present, or even support for loading from separate key and
+        # cert (there is a function for loading from a cert and finding a key
+        # in the keychain, which isn't the same), but we should investigate
+        # whether it can be patched together.
         if config.certificate_chain is not None:
             # do this
             pass
