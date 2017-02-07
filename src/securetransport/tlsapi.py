@@ -223,7 +223,7 @@ class WrappedSocket(TLSWrappedSocket):
 
         # We lose our reference to our socket here so that we can do some
         # short-circuit evaluation elsewhere.
-        self._socket = None
+        self.__dict__['_socket'] = None
 
     def recv(self, bufsize, flags=0):
         # This method loops in order for blocking sockets to behave correctly
