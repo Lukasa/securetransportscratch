@@ -364,6 +364,8 @@ ffibuilder.cdef(
                            SSLReadFunc,
                            SSLWriteFunc);
     OSStatus SSLSetClientSideAuthenticate(SSLContextRef, SSLAuthenticate);
+    OSStatus SSLSetProtocolVersionMax(SSLContextRef context, SSLProtocol maxVersion);
+    OSStatus SSLSetProtocolVersionMin(SSLContextRef context, SSLProtocol minVersion);
 
     OSStatus SSLHandshake(SSLContextRef);
     OSStatus SSLGetSessionState(SSLContextRef, SSLSessionState *);

@@ -2,16 +2,14 @@ import h11
 import socket
 
 from securetransport.tlsapi import SecureTransportClientContext
-from securetransport.tls import TLSConfiguration, CipherSuite
+from securetransport.tls import TLSConfiguration, CipherSuite, TLSVersion
 
 conn = h11.Connection(our_role=h11.CLIENT)
 ctx = SecureTransportClientContext(
     TLSConfiguration(
-        ciphers=[
-            CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-            CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-            CipherSuite.TLS_AES_128_CCM_8_SHA256,
-        ]
+        ciphers=list(CipherSuite),
+        lowest_supported_version=TLSVersion.TLSv1,
+        highest_supported_version=TLSVersion.TLSv1_2,
     )
 )
 mysock = socket.create_connection(('httpbin.org', 443))

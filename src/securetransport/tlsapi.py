@@ -23,8 +23,25 @@ from .tls import (
 from .low_level import (
     SSLSessionContext, SSLProtocolSide, SSLConnectionType, SSLSessionState,
     SecureTransportError, WouldBlockError, SSLErrors, SSLProtocol,
-    SSLSessionOption
+    SSLSessionOption, SSLProtocol
 )
+
+
+def _ssl_protocol_from_tls_version(version):
+    """
+    Given a version from the TLSVersion enum, returns the appropriate entry in
+    the underlying SSLProtocol enum.
+    """
+    versions = {
+        TLSVersion.MINIMUM_SUPPORTED: SSLProtocol.SSLProtocol2,
+        TLSVersion.SSLv2: SSLProtocol.SSLProtocol2,
+        TLSVersion.SSLv3: SSLProtocol.SSLProtocol3,
+        TLSVersion.TLSv1: SSLProtocol.TLSProtocol1,
+        TLSVersion.TLSv1_1: SSLProtocol.TLSProtocol11,
+        TLSVersion.TLSv1_2: SSLProtocol.TLSProtocol12,
+        TLSVersion.MAXIMUM_SUPPORTED: SSLProtocol.TLSProtocol12,
+    }
+    return versions[version]
 
 
 class _Deadline:
@@ -368,7 +385,17 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
             ciphers = [int(cipher) for cipher in config.ciphers]
             self._st_context.set_enabled_ciphers(ciphers)
 
-        # handle lowest supported versions
+        if config.lowest_supported_version is not TLSVersion.MINIMUM_SUPPORTED:
+            version = _ssl_protocol_from_tls_version(
+                config.lowest_supported_version
+            )
+            self._st_context.set_protocol_version_min(version)
+
+        if config.highest_supported_version is not TLSVersion.MAXIMUM_SUPPORTED:
+            version = _ssl_protocol_from_tls_version(
+                config.highest_supported_version
+            )
+            self._st_context.set_protocol_version_max(version)
 
         if config.trust_store is not None:
             # do this

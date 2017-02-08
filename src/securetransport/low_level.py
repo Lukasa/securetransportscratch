@@ -737,3 +737,17 @@ class SSLSessionContext(object):
         _raise_on_error(status)
 
         return name[:length[0]]
+
+    def set_protocol_version_min(self, version):
+        """
+        Sets the minimum protocol version.
+        """
+        status = lib.SSLSetProtocolVersionMin(self._ctx, version)
+        _raise_on_error(status)
+
+    def set_protocol_version_max(self, version):
+        """
+        Sets the maximum protocol version.
+        """
+        status = lib.SSLSetProtocolVersionMax(self._ctx, version)
+        _raise_on_error(status)
