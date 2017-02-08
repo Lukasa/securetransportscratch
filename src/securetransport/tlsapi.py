@@ -27,13 +27,29 @@ from .low_level import (
 )
 
 
-class _Timer:
+class _Deadline:
+    def __init__(self, total_time):
+        self._total_time = total_time
+
+    def remaining_time(self):
+        # Short circuit for blocking sockets or those without timeouts.
+        if self._total_time is None:
+            return None
+        elif self._total_time <= 0:
+            return self._total_time
+
+        return time.monotonic() - self._start
+
     def __enter__(self):
-        self.start = time.monotonic()
+        # Short circuit for blocking sockets or those without timeouts.
+        if self._total_time is not None and self._total_time > 0:
+            self._start = time.monotonic()
+
+        return self
 
     def __exit__(self, *args):
-        self.end = time.monotonic()
-        self.duration = self.end - self.start
+        # Nothing needs to be done here.
+        pass
 
 
 class SecureTransportClientContext(object):
@@ -89,13 +105,13 @@ class WrappedSocket(TLSWrappedSocket):
         # ourselves.
         socket.settimeout(0)
 
-    def _do_read(self, selector, timeout):
+    def _do_read(self, selector, deadline):
         """
         A helper method that performs a read from the network and passes the
         data into the receive buffer.
         """
         selector.modify(self._socket, selectors.EVENT_READ)
-        results = selector.select(timeout)
+        results = selector.select(deadline.remaining_time())
 
         if not results:
             # TODO: Is there a better way we can throw this?
@@ -111,11 +127,11 @@ class WrappedSocket(TLSWrappedSocket):
         self._buffer.receive_bytes_from_network(data)
         return len(data)
 
-    def _do_write(self, selector, timeout):
+    def _do_write(self, selector, deadline):
         """
         A helper method that attempts to write all of the data from the send
         buffer to the network. This may make multiple I/O calls, but will not
-        spend longer than ``timeout``.
+        spend longer than the deadline allows.
         """
         selector.modify(self._socket, selectors.EVENT_WRITE)
 
@@ -125,8 +141,7 @@ class WrappedSocket(TLSWrappedSocket):
             if not data:
                 break
 
-            with _Timer() as t:
-                results = selector.select(timeout)
+            results = selector.select(deadline.remaining_time())
 
             if not results:
                 # TODO: Is there a better way we can throw this?
@@ -140,34 +155,21 @@ class WrappedSocket(TLSWrappedSocket):
             self._buffer.consume_bytes(sent)
             total_sent += sent
 
-            if timeout is not None:
-                timeout -= t.duration
-
         return total_sent
 
     def do_handshake(self) -> None:
-        timeout = self._timeout
-
-        with selectors.DefaultSelector() as sel:
+        with selectors.DefaultSelector() as sel, _Deadline(self._timeout) as deadline:
             sel.register(self._socket, selectors.EVENT_READ)
             while True:
                 try:
                     self._buffer.do_handshake()
                 except WantReadError:
-                    with _Timer() as t:
-                        bytes_read = self._do_read(sel, timeout)
+                    bytes_read = self._do_read(sel, deadline)
 
                     if not bytes_read:
                         raise TLSError("Unexpected EOF during handshake")
-
-                    if timeout is not None:
-                        timeout -= t.duration
                 except WantWriteError:
-                    with _Timer() as t:
-                        self._do_write(sel, timeout)
-
-                    if timeout is not None:
-                        timeout -= t.duration
+                    self._do_write(sel, deadline)
                 else:
                     # Handshake complete!
                     break
@@ -194,16 +196,11 @@ class WrappedSocket(TLSWrappedSocket):
 
         # TODO: So, does unwrap make any sense here? How do we make sure we
         # read up to close_notify, but no further?
-        timeout = self._timeout
-        with selectors.DefaultSelector() as sel:
+        with selectors.DefaultSelector() as sel, _Deadline(self._timeout) as deadline:
             sel.register(self._socket, selectors.EVENT_WRITE)
             while True:
                 try:
-                    with _Timer() as t:
-                        written = self._do_write(sel, timeout)
-
-                    if timeout is not None:
-                        timeout -= t.duration
+                    written = self._do_write(sel, deadline)
                 except ConnectionError:
                     # The socket is not able to tolerate sending, so we're done
                     # here.
@@ -228,8 +225,7 @@ class WrappedSocket(TLSWrappedSocket):
     def recv(self, bufsize, flags=0):
         # This method loops in order for blocking sockets to behave correctly
         # when drip-fed data.
-        timeout = self._timeout
-        with selectors.DefaultSelector() as sel:
+        with selectors.DefaultSelector() as sel, _Deadline(self._timeout) as deadline:
             sel.register(self._socket, selectors.EVENT_READ)
             while True:
                 # This check is inside the loop because of the possibility that
@@ -243,11 +239,7 @@ class WrappedSocket(TLSWrappedSocket):
                 try:
                     return self._buffer.read(bufsize)
                 except WantReadError:
-                    with _Timer() as t:
-                        self._do_read(sel, timeout)
-
-                    if timeout is not None:
-                        timeout -= t.duration
+                    self._do_read(sel, deadline)
 
     def recv_into(self, buffer, nbytes=None, flags=0):
         read_size = nbytes or len(buffer)
@@ -288,9 +280,9 @@ class WrappedSocket(TLSWrappedSocket):
             # curl codebase: https://github.com/curl/curl/blob/807698db025f489dd7894f1195e4983be632bee2/lib/vtls/darwinssl.c#L2477-L2489
             pass
 
-        with selectors.DefaultSelector() as sel:
+        with selectors.DefaultSelector() as sel, _Deadline(self._timeout) as deadline:
             sel.register(self._socket, selectors.EVENT_WRITE)
-            sent = self._do_write(sel, self._timeout)
+            sent = self._do_write(sel, deadline)
         return sent
 
     def sendall(self, bytes, flags=0):
