@@ -10,6 +10,7 @@ ffibuilder.set_source(
     "_securetransport",
     """
     #include <stdlib.h>
+    #include <Security/SecCertificate.h>
     #include <Security/SecureTransport.h>
     """,
     extra_link_args=['-framework', 'Security', '-framework', 'CoreFoundation'],
@@ -18,14 +19,35 @@ ffibuilder.set_source(
 ffibuilder.cdef(
     """
     typedef bool Boolean;
+    typedef uint8_t UInt8;
     typedef uint32_t UInt32;
     typedef signed long OSStatus;
+    typedef signed long long CFIndex;
     typedef ... *CFArrayRef;
+    typedef ... *CFDataRef;
     typedef ... *CFAllocatorRef;
     typedef ... *SSLContextRef;
+    typedef ... *SecCertificateRef;
     typedef ... *SecTrustRef;
+    typedef ... *CFMutableArrayRef;
     typedef const void *SSLConnectionRef;
     typedef const void *CFTypeRef;
+
+    typedef struct {
+        ...;
+    } CFArrayCallBacks;
+
+    const CFAllocatorRef kCFAllocatorDefault;
+    const CFArrayCallBacks kCFTypeArrayCallBacks;
+
+    CFMutableArrayRef CFArrayCreateMutable(CFAllocatorRef allocator,
+                                           CFIndex capacity,
+                                           const CFArrayCallBacks *callBacks);
+    void CFArrayAppendValue(CFMutableArrayRef, const void *);
+
+    CFDataRef CFDataCreate(CFAllocatorRef, const UInt8 *, CFIndex);
+
+    SecCertificateRef SecCertificateCreateWithData(CFAllocatorRef, CFDataRef);
 
     typedef enum {
         kSSLServerSide,
