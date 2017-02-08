@@ -566,6 +566,10 @@ class SecureTransportTrustStore(TrustStore):
 
     @classmethod
     def from_pem_file(cls, path):
+        """
+        Returns a TrustStore object that represents a bundle of certificates
+        extracted from a PEM file.
+        """
         # curl has solved this problem by using
         # kSSLSessionOptionBreakOnServerAuth and then running a custom
         # validator. This will work well. Note that the documentation states
