@@ -9,6 +9,8 @@ https://github.com/curl/curl/blob/master/lib/vtls/darwinssl.c
 """
 from typing import Optional, Any, Union
 
+import base64
+import re
 import selectors
 import socket
 import time
@@ -23,7 +25,12 @@ from .tls import (
 from .low_level import (
     SSLSessionContext, SSLProtocolSide, SSLConnectionType, SSLSessionState,
     SecureTransportError, WouldBlockError, SSLErrors, SSLProtocol,
-    SSLSessionOption, SSLProtocol
+    SSLSessionOption, SSLProtocol, certificate_array_from_der_bytes
+)
+
+
+_CERTS_RE = re.compile(
+    rb"-----BEGIN CERTIFICATE-----\n(.*?)\n-----END CERTIFICATE-----", re.DOTALL
 )
 
 
@@ -545,6 +552,9 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
 
 
 class SecureTransportTrustStore(TrustStore):
+    def __init__(self, cert_array=None):
+        self._cert_array = cert_array
+
     @classmethod
     def system(cls):
         """
@@ -556,8 +566,6 @@ class SecureTransportTrustStore(TrustStore):
 
     @classmethod
     def from_pem_file(cls, path):
-        # TODO: Ok, so the comment below is not quite right.
-        #
         # curl has solved this problem by using
         # kSSLSessionOptionBreakOnServerAuth and then running a custom
         # validator. This will work well. Note that the documentation states
@@ -565,9 +573,21 @@ class SecureTransportTrustStore(TrustStore):
         # own validation (weirdly). We need to be cautious about older macOS
         # versions here to avoid unexpectedly allowing connections that should
         # be forbidden.
-        raise NotImplementedError(
-            "SecureTransport does not support PEM bundles as trust stores"
-        )
+
+        # Ok, so here's how this works. The path is to a file that contains
+        # at least 1 PEM file. We need to split the file up into a sequences of
+        # PEMs, convert them to DER, and then load them up into a
+        # CFMutableArray.
+        with open(path, 'rb') as f:
+            der_certs = [
+                base64.b64decode(match.group(1))
+                for match in _CERTS_RE.finditer(f.read())
+            ]
+        if not der_certs:
+            raise TLSError("No certs in file!")
+
+        cert_array = certificate_array_from_der_bytes(der_certs)
+        return cls(cert_array)
 
 
 _SystemTrustStore = SecureTransportTrustStore()

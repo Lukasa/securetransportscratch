@@ -8,7 +8,7 @@ import re
 import enum
 
 from _securetransport import ffi, lib
-from tls import TLSError
+from .tls import TLSError
 
 
 class CastableEnum(enum.Enum):
@@ -751,3 +751,33 @@ class SSLSessionContext(object):
         """
         status = lib.SSLSetProtocolVersionMax(self._ctx, version)
         _raise_on_error(status)
+
+
+def certificate_array_from_der_bytes(der_certs):
+    """
+    Given a list of DER bytes, returns a CFArray containing the certs.
+    """
+    array = lib.CFArrayCreateMutable(
+        lib.kCFAllocatorDefault, 0, ffi.addressof(lib.kCFTypeArrayCallBacks)
+    )
+    if array == ffi.NULL:
+        raise TLSError("Unable to allocate memory!")
+    array = ffi.gc(array, lib.CFRelease)
+
+    for cert_bytes in der_certs:
+        certdata = lib.CFDataCreate(
+            lib.kCFAllocatorDefault, cert_bytes, len(cert_bytes)
+        )
+        if certdata == ffi.NULL:
+            raise TLSError("Unable to allocate memory!")
+        cert = lib.SecCertificateCreateWithData(
+            lib.kCFAllocatorDefault, certdata
+        )
+        lib.CFRelease(certdata)
+        if cert == ffi.NULL:
+            raise TLSError("Unable to build cert object!")
+
+        lib.CFArrayAppendValue(array, cert)
+        lib.CFRelease(cert)
+
+    return array
