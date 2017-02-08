@@ -238,6 +238,8 @@ class WrappedSocket(TLSWrappedSocket):
                 if self._socket is None:
                     return b''
 
+                # TODO: This must also tolerate WantWriteError. Probably that
+                # will allow us to unify our code with do_handhake and send.
                 try:
                     return self._buffer.read(bufsize)
                 except WantReadError:
@@ -254,7 +256,8 @@ class WrappedSocket(TLSWrappedSocket):
         return len(data)
 
     def send(self, data, flags=0):
-        # TODO: Timeouts here need to be turned into deadlines.
+        # TODO: This must also tolerate WantReadError. Probably that will allow
+        # us to unify our code with do_handhake and recv.
         try:
             self._buffer.write(data)
         except WantWriteError:
