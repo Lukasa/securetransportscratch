@@ -363,8 +363,10 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
             pass
 
         if config.ciphers is not None:
-            # do this
-            pass
+            # SecureTransport will ignore any cipher it doesn't recognise, so
+            # we don't have to do any validation here.
+            ciphers = [int(cipher) for cipher in config.ciphers]
+            self._st_context.set_enabled_ciphers(ciphers)
 
         # handle lowest supported versions
 
