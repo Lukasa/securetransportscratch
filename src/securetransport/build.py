@@ -11,6 +11,7 @@ ffibuilder.set_source(
     """
     #include <stdlib.h>
     #include <Security/SecCertificate.h>
+    #include <Security/SecTrust.h>
     #include <Security/SecureTransport.h>
     """,
     extra_link_args=['-framework', 'Security', '-framework', 'CoreFoundation'],
@@ -37,6 +38,17 @@ ffibuilder.cdef(
         ...;
     } CFArrayCallBacks;
 
+    typedef uint32_t SecTrustResultType;
+    enum {
+        kSecTrustResultInvalid,
+        kSecTrustResultProceed,
+        kSecTrustResultDeny,
+        kSecTrustResultUnspecified,
+        kSecTrustResultRecoverableTrustFailure,
+        kSecTrustResultFatalTrustFailure,
+        kSecTrustResultOtherError
+    };
+
     const CFAllocatorRef kCFAllocatorDefault;
     const CFArrayCallBacks kCFTypeArrayCallBacks;
 
@@ -48,6 +60,10 @@ ffibuilder.cdef(
     CFDataRef CFDataCreate(CFAllocatorRef, const UInt8 *, CFIndex);
 
     SecCertificateRef SecCertificateCreateWithData(CFAllocatorRef, CFDataRef);
+
+    OSStatus SecTrustSetAnchorCertificates(SecTrustRef trust, CFArrayRef anchorCertificates);
+    OSStatus SecTrustSetAnchorCertificatesOnly(SecTrustRef trust, Boolean anchorCertificatesOnly);
+    OSStatus SecTrustEvaluate(SecTrustRef trust, SecTrustResultType *result);
 
     typedef enum {
         kSSLServerSide,

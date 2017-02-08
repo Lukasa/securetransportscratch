@@ -752,6 +752,42 @@ class SSLSessionContext(object):
         status = lib.SSLSetProtocolVersionMax(self._ctx, version)
         _raise_on_error(status)
 
+    def validate_against_certs(self, certs):
+        """
+        Given a CFArray of trust roots, validate against them.
+
+        Returns True if the certificate is valid, otherwise returns False.
+        """
+        trust = ffi.new("SecTrustRef *")
+        certs = ffi.cast("CFArrayRef", certs)
+        status = lib.SSLCopyPeerTrust(self._ctx, trust)
+        _raise_on_error(status)
+
+        if trust[0] == ffi.NULL:
+            raise TLSError("Unable to allocate memory!")
+
+        try:
+            status = lib.SecTrustSetAnchorCertificates(trust[0], certs)
+            _raise_on_error(status)
+
+            status = lib.SecTrustSetAnchorCertificatesOnly(trust[0], True)
+            _raise_on_error(status)
+
+            result = ffi.new("SecTrustResultType *")
+            status = lib.SecTrustEvaluate(trust[0], result)
+            _raise_on_error(status)
+        finally:
+            lib.CFRelease(trust[0])
+
+        # Ok, we know what is going on now. Check the result.
+        successes = (
+            lib.kSecTrustResultUnspecified, lib.kSecTrustResultProceed
+        )
+        if result[0] in successes:
+            return True
+
+        return False
+
 
 def certificate_array_from_der_bytes(der_certs):
     """

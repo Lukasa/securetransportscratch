@@ -402,10 +402,6 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
             )
             self._st_context.set_protocol_version_max(version)
 
-        if config.trust_store is not None:
-            # do this
-            pass
-
     def _io_error(self):
         """
         Raises the appropriate I/O error if we got a WouldBlockError.
@@ -431,6 +427,27 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
             return WantWriteError("Must write data")
 
         return WantReadError("Must read data")
+
+    def _validate_with_custom_trust(self):
+        """
+        Validate the peer cert chain with a custom trust store.
+
+        This is only ever called when we have set the handshake to break on
+        server auth. Here, we want to look at our config. If the config says
+        not to validate then we don't. Otherwise, we assume we don't have the
+        system trust store, and so we validate against the trust store we have.
+        """
+        config = self._original_context.configuration
+        if not config.validate_certificates:
+            return
+
+        trust_store = config.trust_store
+        result = self._st_context.validate_against_certs(
+            trust_store._cert_array
+        )
+
+        if not result:
+            raise TLSError("Failed to validate certificates!")
 
     def _read_func(self, _, to_read):
         # We're doing some unnecessary copying here, but that's ok for
@@ -482,9 +499,7 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
                 # we want to check whether we're breaking on the server auth
                 # here: if we are, we need to do our own handshake.
                 if e.error_code is SSLErrors.errSSLServerAuthCompleted:
-                    # Here we'd do the cert validation except...right now we
-                    # don't know how.
-                    # TODO: learn how.
+                    self._validate_with_custom_trust()
                     continue
 
                 # This isn't something we know how to treat specially. So
