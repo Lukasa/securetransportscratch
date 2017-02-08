@@ -348,9 +348,7 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
         """
         Given the configuration we got at setup time, handle it.
         """
-        # TODO: handle: 'validate_certificates', 'certificate_chain',
-        # 'ciphers', 'inner_protocols', 'lowest_supported_version',
-        # 'highest_supported_version', 'trust_store'
+        # TODO: handle: 'certificate_chain', trust_store'
         config = self._original_context.configuration
 
         # In either of these cases, we need to break on server auth to take
