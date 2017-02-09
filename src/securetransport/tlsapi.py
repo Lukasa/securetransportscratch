@@ -586,6 +586,26 @@ class SecureTransportTrustStore(TrustStore):
         Returns a TrustStore object that represents a bundle of certificates
         extracted from a PEM file.
         """
+        # TODO: This should probably be lazy. Here's why:
+        #
+        # Right now the hashability of this object is predicated on the idea
+        # that two trust stores with the same label are the same. That's not
+        # actually a guarantee: a user could change the contents of a trust
+        # store during the runtime of a program. This class wouldn't notice,
+        # and so would never update itself. Worse, it would still hash as the
+        # same as a new one made after the bundle was updated, tricking some
+        # implementations into failing to pick up new certs (or worse, removed
+        # ones!).
+        #
+        # However, if the certificate chain building was done lazily, we could
+        # ensure that even if the cert chain changes during the runtime we
+        # would pick those changes up. There are some optimisations available
+        # here: we could, for example, hash the file contents to spot changes,
+        # or keep hold of an mtime, or any number of things. That way we avoid
+        # repeatedly building identical chains, but can also ensure that
+        # changes are spotted, and that two things that compare identical
+        # actually *are*.
+
         # Ok, so here's how this works. The path is to a file that contains
         # at least 1 PEM file. We need to split the file up into a sequences of
         # PEMs, convert them to DER, and then load them up into a
