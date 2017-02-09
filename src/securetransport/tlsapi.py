@@ -567,7 +567,8 @@ class _SecureTransportBuffer(TLSWrappedBuffer):
 
 
 class SecureTransportTrustStore(TrustStore):
-    def __init__(self, cert_array=None):
+    def __init__(self, label, cert_array=None):
+        self._label = label
         self._cert_array = cert_array
 
     @classmethod
@@ -606,10 +607,24 @@ class SecureTransportTrustStore(TrustStore):
             raise TLSError("No certs in file!")
 
         cert_array = certificate_array_from_der_bytes(der_certs)
-        return cls(cert_array)
+        return cls(str(path), cert_array)
+
+    def __eq__(self, other):
+        if not isinstance(other, SecureTransportTrustStore):
+            return NotImplemented
+
+        return (
+            other._label == self._label
+        )
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def __hash__(self):
+        return hash(self._label)
 
 
-_SystemTrustStore = SecureTransportTrustStore()
+_SystemTrustStore = SecureTransportTrustStore("system-trust-store")
 
 
 SecureTransportBackend = Backend(
